@@ -10,30 +10,23 @@
 - 界面仿游戏卡片列表：左栏采集/制造、中栏类别、顶部搜索 + T1–T8 筛选，点卡片出详情
 - 手机可用：窄屏自动切换为全屏单列布局
 
-## 两种用法
+## 在线网页版（免安装）
 
-### 1. 油猴脚本（推荐，游戏页内浮层）
+👉 **https://qiqiqixun.github.io/fishidle-pricer/**
+
+打开就能用，数据全在本地计算，不联网也能跑（把页面另存为 `.html` 即可离线使用）。
+
+## 油猴脚本（游戏页内浮层）
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/)
-2. 从下面的链接安装脚本（Tampermonkey 会自动弹出安装页）
+2. 点下面的链接安装脚本（浏览器会弹出 Tampermonkey 的安装页）
 
-```
-https://raw.githubusercontent.com/<用户名>/<仓库名>/main/fishidle-pricer.user.js
-```
+   - 主线路：https://raw.githubusercontent.com/qiqiqixun/fishidle-pricer/main/fishidle-pricer.user.js
+   - 国内加速：https://cdn.jsdelivr.net/gh/qiqiqixun/fishidle-pricer@main/fishidle-pricer.user.js
 
 3. 打开 `https://fishidle.com/game/...`，页面上会出现一个小「价」图标，点开即用
 
 浮层支持拖动、右下角拖拽缩放、按钮收起；位置、尺寸、参数、材料价都会记在 localStorage。
-
-### 2. 网页版（不需要任何插件）
-
-直接打开 GitHub Pages 地址即可：
-
-```
-https://<用户名>.github.io/<仓库名>/
-```
-
-也可以把 `index.html` 下载到本地，双击用浏览器打开，完全离线可用。
 
 ## 口径与边界
 
