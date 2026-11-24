@@ -6,7 +6,7 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
 <script>// ==UserScript==
 // @name         FishIdle 定价器
 // @namespace    fishidle.pricer
-// @version      1.5.0
+// @version      1.5.1
 // @description  在 FishIdle 游戏页叠加定价浮层：目标日收益 → 每件该卖多少钱；也可填自己的售价，反算日均收入与分均收入。支持按类别分别设加速、材料可逐个选择自产或外购。
 // @author       you
 // @match        https://fishidle.com/*
@@ -267,13 +267,13 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
   const accMap = LS.get('fq_accmap', {});          // 'c:类别' / 's:技能' -> 百分比
   const myStore = LS.get('fq_myprice', {});        // 我填的售价（金/件）
   const myOf = n => { const v = parseFloat(myStore[n]); return isNaN(v) ? 0 : v; };
-  function revOf(name, perDay) {
+  function revOf(name, perDay, mc) {
     const p = myOf(name);
     if (!p || !perDay) return null;
-    const day = p * perDay;
-    const hour = state.hours ? day / state.hours : 0;
+    const net = Math.max(0, p - (mc || 0));   // 与「达标单价」同口径：扣掉外购材料成本
+    const day = net * perDay;
     const min = state.hours ? day / (state.hours * 60) : 0;
-    return { p, day, hour, min };
+    return { p, net, day, min };
   }
 
   /* ---------------- 计算 ---------------- */
@@ -419,7 +419,7 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
       <div class="l2">产出 ×${t.qty} · 经验 +${t.xp} · 基础 ${t.sec.toFixed(1)}秒 · 单件 ${c.u === Infinity ? '∞' : c.u.toFixed(2)}秒 · 加速 ${accC(t.category)}%</div>
       ${bad}
       <div class="l3"><span class="p">${fmtMoney(c.price)}</span><span class="u">金/件</span><span class="d">日 ${fmt(c.perDay)}</span></div>
-      ${(() => { const rv = revOf(name, c.perDay); return rv ? `<div class="rev">售价 ${fmtMoney(rv.p)} → 日 ${fmtMoney(rv.day)}金 · 分 ${fmtMoney(rv.min)}/分</div>` : ''; })()}
+      ${(() => { const rv = revOf(name, c.perDay, c.mc); return rv ? `<div class="rev">售价 ${fmtMoney(rv.p)} → 日净 ${fmtMoney(rv.day)}金 · 分净 ${fmtMoney(rv.min)}/分</div>` : ''; })()}
       <div class="chips">${t.ingredients.map(i => i.name + '×' + i.qty).join(' · ')}</div>
     </div>`;
   }
@@ -430,7 +430,7 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
       <span class="nm">${y.name}</span><span class="tb">T${String(node.tier).replace('T', '')}</span></div>
       <div class="l2">${node.skill} · ${node.area} · ${node.sec.toFixed(1)}秒/次 · 产量 ×${y.min}–${y.max} · 加速 ${accS(node.skill)}%</div>
       <div class="l3"><span class="p">${fmtMoney(c.price)}</span><span class="u">金/件</span><span class="d">日 ${fmt(c.perDay)}</span></div>
-      ${(() => { const rv = revOf(y.name, c.perDay); return rv ? `<div class="rev">售价 ${fmtMoney(rv.p)} → 日 ${fmtMoney(rv.day)}金 · 分 ${fmtMoney(rv.min)}/分</div>` : ''; })()}
+      ${(() => { const rv = revOf(y.name, c.perDay, 0); return rv ? `<div class="rev">售价 ${fmtMoney(rv.p)} → 日净 ${fmtMoney(rv.day)}金 · 分净 ${fmtMoney(rv.min)}/分</div>` : ''; })()}
       <div class="chips">单件 ${c.unit.toFixed(2)}s · 经验 +${node.xp}</div>
     </div>`;
   }
@@ -496,10 +496,11 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
       if (netEl) netEl.textContent = '';
       return;
     }
-    const day = p * perDay, min = state.hours ? day / (state.hours * 60) : 0;
+    const net = Math.max(0, p - (mc || 0));        // 与达标单价同口径：扣掉外购材料成本
+    const day = net * perDay, min = state.hours ? day / (state.hours * 60) : 0;
     dayEl.textContent = fmtMoney(day) + ' 金';
     minEl.textContent = fmtMoney(min) + ' 金/分';
-    if (netEl) netEl.textContent = '单件净利 ' + fmtMoney(Math.max(0, p - (mc || 0))) + ' 金' + (hasBuy && !(mc > 0) ? '（材料价未填，按 0 计）' : '');
+    if (netEl) netEl.textContent = '单件净利 ' + fmtMoney(net) + ' 金' + (hasBuy && !(mc > 0) ? '（材料价未填，按 0 计）' : '');
   }
   function bindMyPrice(name, perDay, mc) {
     const inp = $('#fq-myprice');
@@ -550,9 +551,9 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
             <div><div class="k">单件耗时（含前置，已加速）</div><div class="v">${c.u === Infinity ? '∞' : c.u.toFixed(2) + ' s'}</div></div>
             <div><div class="k">本工序基础</div><div class="v">${r.sec.toFixed(1)} s</div></div>
             <div><div class="k">日产量（${state.hours}小时）</div><div class="v">${fmt(c.perDay)} 件</div></div>
-            <div><div class="k">达标单价</div><div class="v g">${fmtMoney(c.price)}</div></div>
-            <div><div class="k">日收益</div><div class="v g" id="fq-revDay">—</div></div>
-            <div><div class="k">分均收益</div><div class="v" id="fq-revMin">—</div></div>
+            <div><div class="k">达标单价${state.matMode === 'buy' ? '（含材料成本）' : ''}</div><div class="v g">${fmtMoney(c.price)}</div></div>
+            <div><div class="k">${state.matMode === 'buy' ? '日净收益（已扣材料）' : '日收益'}</div><div class="v g" id="fq-revDay">—</div></div>
+            <div><div class="k">${state.matMode === 'buy' ? '分均净收益' : '分均收益'}</div><div class="v" id="fq-revMin">—</div></div>
           </div>
           ${matBlock}
         </div>
