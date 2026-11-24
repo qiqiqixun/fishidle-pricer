@@ -6,8 +6,8 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
 <script>// ==UserScript==
 // @name         FishIdle 定价器
 // @namespace    fishidle.pricer
-// @version      1.2.0
-// @description  在 FishIdle 游戏页叠加定价浮层：目标日收益 → 每件该卖多少钱。支持按类别分别设加速、材料可逐个选择自产或外购。
+// @version      1.5.0
+// @description  在 FishIdle 游戏页叠加定价浮层：目标日收益 → 每件该卖多少钱；也可填自己的售价，反算日均收入与分均收入。支持按类别分别设加速、材料可逐个选择自产或外购。
 // @author       you
 // @match        https://fishidle.com/*
 // @grant        none
@@ -108,8 +108,14 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
   .fq-kpi .k{color:var(--dim);font-size:10.5px}
   .fq-kpi .v{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
   .fq-kpi .v.g{color:var(--gold)}
-  .fq-mats{margin-top:9px;font-size:11px;color:#98a7b5}
-  .fq-matrow{display:flex;align-items:center;gap:7px;margin:4px 0;padding:3px 0;border-bottom:1px dashed #232b33}
+  .fq-price{display:flex;align-items:center;gap:8px;margin:0 0 9px;flex-wrap:wrap}
+  .fq-price .k{color:var(--dim);font-size:11px}
+  .fq-price input{width:120px;background:#0d1115;border:1px solid #3d6a60;color:#f5c451;border-radius:6px;padding:5px 8px;font-size:13px;text-align:right}
+  .fq-price input:focus{outline:none;border-color:#4dd6b0}
+  .fq-price .hint{color:#7d8b99;font-size:10.5px}
+  .fq-price .net{color:#8fe0c4;font-size:10.5px}
+  .fq-card .rev{margin-top:5px;color:#8fe0c4;font-size:10.5px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fq-mats{margin-top:9px;font-size:11px;color:#98a7b5}  .fq-matrow{display:flex;align-items:center;gap:7px;margin:4px 0;padding:3px 0;border-bottom:1px dashed #232b33}
   .fq-matrow label{display:flex;align-items:center;gap:5px;cursor:pointer;min-width:118px}
   .fq-matrow input[type=number]{width:70px;background:#0d1115;border:1px solid var(--line);color:var(--txt);border-radius:4px;padding:3px 5px;font-size:11.5px}
   .fq-matrow input[type=number]:disabled{opacity:.35}
@@ -259,6 +265,16 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
   const priceStore = LS.get('fq_prices', {});
   const selfMats = LS.get('fq_selfmats', {});      // 外购模式下仍自产的直接材料
   const accMap = LS.get('fq_accmap', {});          // 'c:类别' / 's:技能' -> 百分比
+  const myStore = LS.get('fq_myprice', {});        // 我填的售价（金/件）
+  const myOf = n => { const v = parseFloat(myStore[n]); return isNaN(v) ? 0 : v; };
+  function revOf(name, perDay) {
+    const p = myOf(name);
+    if (!p || !perDay) return null;
+    const day = p * perDay;
+    const hour = state.hours ? day / state.hours : 0;
+    const min = state.hours ? day / (state.hours * 60) : 0;
+    return { p, day, hour, min };
+  }
 
   /* ---------------- 计算 ---------------- */
   const memo = {};
@@ -403,6 +419,7 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
       <div class="l2">产出 ×${t.qty} · 经验 +${t.xp} · 基础 ${t.sec.toFixed(1)}秒 · 单件 ${c.u === Infinity ? '∞' : c.u.toFixed(2)}秒 · 加速 ${accC(t.category)}%</div>
       ${bad}
       <div class="l3"><span class="p">${fmtMoney(c.price)}</span><span class="u">金/件</span><span class="d">日 ${fmt(c.perDay)}</span></div>
+      ${(() => { const rv = revOf(name, c.perDay); return rv ? `<div class="rev">售价 ${fmtMoney(rv.p)} → 日 ${fmtMoney(rv.day)}金 · 分 ${fmtMoney(rv.min)}/分</div>` : ''; })()}
       <div class="chips">${t.ingredients.map(i => i.name + '×' + i.qty).join(' · ')}</div>
     </div>`;
   }
@@ -413,6 +430,7 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
       <span class="nm">${y.name}</span><span class="tb">T${String(node.tier).replace('T', '')}</span></div>
       <div class="l2">${node.skill} · ${node.area} · ${node.sec.toFixed(1)}秒/次 · 产量 ×${y.min}–${y.max} · 加速 ${accS(node.skill)}%</div>
       <div class="l3"><span class="p">${fmtMoney(c.price)}</span><span class="u">金/件</span><span class="d">日 ${fmt(c.perDay)}</span></div>
+      ${(() => { const rv = revOf(y.name, c.perDay); return rv ? `<div class="rev">售价 ${fmtMoney(rv.p)} → 日 ${fmtMoney(rv.day)}金 · 分 ${fmtMoney(rv.min)}/分</div>` : ''; })()}
       <div class="chips">单件 ${c.unit.toFixed(2)}s · 经验 +${node.xp}</div>
     </div>`;
   }
@@ -468,6 +486,38 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
 
   function showDrawer(html) { $('#fq-drawer').className = 'fq-drawer show'; $('#fq-drawer').innerHTML = html; }
 
+  // 我的售价 -> 日收益 / 分均收益（实时联动）
+  function refreshRevUI(perDay, mc, hasBuy) {
+    const inp = $('#fq-myprice'), dayEl = $('#fq-revDay'), minEl = $('#fq-revMin'), netEl = $('#fq-net');
+    if (!inp || !dayEl) return;
+    const p = parseAmount(inp.value);
+    if (!p || !perDay) {
+      dayEl.textContent = '—'; minEl.textContent = '—';
+      if (netEl) netEl.textContent = '';
+      return;
+    }
+    const day = p * perDay, min = state.hours ? day / (state.hours * 60) : 0;
+    dayEl.textContent = fmtMoney(day) + ' 金';
+    minEl.textContent = fmtMoney(min) + ' 金/分';
+    if (netEl) netEl.textContent = '单件净利 ' + fmtMoney(Math.max(0, p - (mc || 0))) + ' 金' + (hasBuy && !(mc > 0) ? '（材料价未填，按 0 计）' : '');
+  }
+  function bindMyPrice(name, perDay, mc) {
+    const inp = $('#fq-myprice');
+    if (!inp) return;
+    const r0 = recipes[name] && recipes[name][0];
+    const hasBuy = !!r0 && r0.ingredients.some(i => !isSelfMade(i.name));
+    refreshRevUI(perDay, mc, hasBuy);
+    inp.oninput = () => refreshRevUI(perDay, mc, hasBuy);
+    inp.onchange = () => {
+      const v = parseAmount(inp.value);
+      if (v > 0) myStore[name] = v; else delete myStore[name];
+      LS.set('fq_myprice', myStore);
+      inp.value = v > 0 ? fmtMoney(v) : '';
+      refreshRevUI(perDay, mc, hasBuy);
+      renderGrid();                       // 卡片上的收益行同步更新
+    };
+  }
+
   function openCraftDetail(name) {
     const c = rowCalc(name), r = c.r, rows = [];
     treeRows(name, 0, rows);
@@ -490,16 +540,25 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
       <div class="fq-dbody">
         <div class="fq-tree">${rows.map(x => `<div class="row" style="padding-left:${x.d * 14}px"><span class="k">${x.k}</span><span class="v">${x.v}</span></div>`).join('')}</div>
         <div>
+          <div class="fq-price">
+            <span class="k">我的售价（金/件）</span>
+            <input id="fq-myprice" type="text" inputmode="decimal" placeholder="${fmtMoney(c.price)}" value="${myOf(name) ? fmtMoney(myOf(name)) : ''}">
+            <span class="hint">填了按你的价算收益，留空按目标收益</span>
+            ${state.matMode === 'buy' ? `<span class="net" id="fq-net"></span>` : ''}
+          </div>
           <div class="fq-kpi">
             <div><div class="k">单件耗时（含前置，已加速）</div><div class="v">${c.u === Infinity ? '∞' : c.u.toFixed(2) + ' s'}</div></div>
             <div><div class="k">本工序基础</div><div class="v">${r.sec.toFixed(1)} s</div></div>
-            <div><div class="k">日产量</div><div class="v">${fmt(c.perDay)} 件</div></div>
+            <div><div class="k">日产量（${state.hours}小时）</div><div class="v">${fmt(c.perDay)} 件</div></div>
             <div><div class="k">达标单价</div><div class="v g">${fmtMoney(c.price)}</div></div>
+            <div><div class="k">日收益</div><div class="v g" id="fq-revDay">—</div></div>
+            <div><div class="k">分均收益</div><div class="v" id="fq-revMin">—</div></div>
           </div>
           ${matBlock}
         </div>
       </div>`);
     $('#fq-closeDrawer').onclick = () => { $('#fq-drawer').className = 'fq-drawer'; state.open = null; };
+    bindMyPrice(name, c.perDay, c.mc);
     $('#fq-drawer').querySelectorAll('.fq-mp').forEach(inp => inp.onchange = () => {
       priceStore[decodeURIComponent(inp.dataset.m)] = inp.value;
       LS.set('fq_prices', priceStore);
@@ -527,14 +586,23 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
           <div class="row"><span class="k">单件耗时</span><span class="v">${c.unit.toFixed(3)} 秒</span></div>
           <div class="row"><span class="k">同区其他产出</span><span class="v">${node.yields.map(q => q.name).join('、')}</span></div>
         </div>
-        <div><div class="fq-kpi">
+        <div>
+          <div class="fq-price">
+            <span class="k">我的售价（金/件）</span>
+            <input id="fq-myprice" type="text" inputmode="decimal" placeholder="${fmtMoney(c.price)}" value="${myOf(y.name) ? fmtMoney(myOf(y.name)) : ''}">
+            <span class="hint">填了按你的价算收益，留空按目标收益</span>
+          </div>
+          <div class="fq-kpi">
           <div><div class="k">单件耗时</div><div class="v">${c.unit.toFixed(2)} s</div></div>
-          <div><div class="k">日产量</div><div class="v">${fmt(c.perDay)} 件</div></div>
+          <div><div class="k">日产量（${state.hours}小时）</div><div class="v">${fmt(c.perDay)} 件</div></div>
           <div><div class="k">达标单价</div><div class="v g">${fmtMoney(c.price)}</div></div>
           <div><div class="k">经验/次</div><div class="v">+${node.xp}</div></div>
+          <div><div class="k">日收益</div><div class="v g" id="fq-revDay">—</div></div>
+          <div><div class="k">分均收益</div><div class="v" id="fq-revMin">—</div></div>
         </div></div>
       </div>`);
     $('#fq-closeDrawer').onclick = () => { $('#fq-drawer').className = 'fq-drawer'; state.open = null; };
+    bindMyPrice(y.name, c.perDay, 0);
   }
 
   /* ---------------- 分类加速面板 ---------------- */
@@ -577,7 +645,7 @@ body::after{content:"点击左上「价」图标展开定价器";position:fixed;
     $('#fq-tiers').innerHTML = ['', 1, 2, 3, 4, 5, 6, 7, 8].map(t =>
       `<button data-t="${t}" class="${(state.tier === String(t) || (!state.tier && !t)) ? 'on' : ''}">${t ? 'T' + t : '全部'}</button>`).join('');
     $('#fq-tiers').querySelectorAll('button').forEach(b => b.onclick = () => { state.tier = b.dataset.t; render(); });
-    $('#fq-sum').innerHTML = `目标 <b>${fmtMoney(state.target)}</b>/天 · <b>${state.hours}</b>小时 · 默认加速 <b>${state.acc}%</b> · ${state.yieldMode === 'min' ? '保底产量' : '平均产量'} · ${state.matMode === 'buy' ? '材料外购' : '全自产'} · 分类加速 ${Object.keys(accMap).length} 项`;
+    $('#fq-sum').innerHTML = `目标 <b>${fmtMoney(state.target)}</b>/天 · <b>${state.hours}</b>小时 · 默认加速 <b>${state.acc}%</b> · ${state.yieldMode === 'min' ? '保底产量' : '平均产量'} · ${state.matMode === 'buy' ? '材料外购' : '全自产'} · 分类加速 ${Object.keys(accMap).length} 项${Object.keys(myStore).length ? ` · 已填价 ${Object.keys(myStore).length} 个` : ''}`;
     renderGrid();
     buildAccBox();
     $('#fq-foot').innerHTML = `数据：${DATA.meta.recipes} 条配方 / ${DATA.meta.nodes} 个采集区域 · 版本 ${DATA.meta.versions.recipes} · 全部本地计算`;
